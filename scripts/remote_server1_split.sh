@@ -11,8 +11,8 @@ debug_1=$build_path/server1/debug_files
 # #####################Inputs##########################################################################################################
 
 # cs0_ip is the ip of server0, cs1_ip is the ip of server1
-cs0_ip=172.30.9.43
-cs1_ip=172.30.9.43
+cs0_ip=127.0.0.1
+cs1_ip=127.0.0.1
 
 # Ports on which weights recceiver talk
 cs0_port=3390
