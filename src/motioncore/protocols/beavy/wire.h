@@ -93,6 +93,8 @@ template <typename T>
 using ArithmeticBEAVYWireP = std::shared_ptr<ArithmeticBEAVYWire<T>>;
 template <typename T>
 using ArithmeticBEAVYWireVector = std::vector<std::shared_ptr<ArithmeticBEAVYWire<T>>>;
+template <typename T>
+using ArithmeticBEAVYWireCP = std::shared_ptr<const ArithmeticBEAVYWire<T>>; //Added on Feb 10 
 
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const ArithmeticBEAVYWire<T>& w) {

@@ -10,7 +10,7 @@ add_subdirectory(example_template)
 add_subdirectory(millionaires_problem)
 add_subdirectory(sha256)
 add_subdirectory(triple_generator)
-
+add_subdirectory(piecewise_linear)
 add_subdirectory(beavy_arithmetic)
 add_subdirectory(beavy_dot_product)
 add_subdirectory(beavy_gemm)

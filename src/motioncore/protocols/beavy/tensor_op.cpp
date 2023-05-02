@@ -1521,7 +1521,7 @@ ArithmeticBEAVYTensorConstMul<T>::ArithmeticBEAVYTensorConstMul(
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T> created", gate_id_));
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYTensorConstMul<T> created", gate_id_));
     }
   }
 }
@@ -1535,7 +1535,7 @@ void ArithmeticBEAVYTensorConstMul<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_setup start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConstMul<T>::evaluate_setup start", gate_id_));
     }
   }
 
@@ -1560,7 +1560,7 @@ void ArithmeticBEAVYTensorConstMul<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_setup end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConstMul<T>::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -1571,7 +1571,7 @@ void ArithmeticBEAVYTensorConstMul<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_online start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConstMul<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -1591,7 +1591,7 @@ void ArithmeticBEAVYTensorConstMul<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConstMul<T>::evaluate_online end", gate_id_));
     }
   }
 }

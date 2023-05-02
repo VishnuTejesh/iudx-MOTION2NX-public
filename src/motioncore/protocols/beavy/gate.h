@@ -351,6 +351,59 @@ class ArithmeticBEAVYADDGate : public detail::BasicArithmeticBEAVYBinaryGate<T> 
   void evaluate_online() override;
 };
 
+//--------------Arithmetic Constant Multiplication - Added on Feb 10 ----------------------
+template <typename T>
+class ArithmeticBEAVYConstMul : public NewGate {
+ public:
+  ArithmeticBEAVYConstMul(std::size_t gate_id, BEAVYProvider& beavy_provider_, const size_t fractional_bits,
+                            const T k, ArithmeticBEAVYWireP<T>&& input);
+  ~ArithmeticBEAVYConstMul();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  // const ArithmeticBEAVYWireP<T>& get_output_tensor() const { return output_; }
+  ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; }
+ private:
+  BEAVYProvider& beavy_provider_;
+  ArithmeticBEAVYWireP<T> input_;
+  const size_t fractional_bits_;
+  const T constant_;
+  std::shared_ptr<ArithmeticBEAVYWire<T>> output_;
+  // ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+  // std::vector<T> Delta_y_share_;
+  // std::unique_ptr<MOTION::IntegerMultiplicationSender<T>> mult_sender_;
+  // std::unique_ptr<MOTION::IntegerMultiplicationReceiver<T>> mult_receiver_;
+};
+
+//--------------Arithmetic Constant Addition - Added on Feb 15 ----------------------
+template <typename T>
+class ArithmeticBEAVYConstADD : public NewGate {
+ public:
+  ArithmeticBEAVYConstADD(std::size_t gate_id, BEAVYProvider& beavy_provider_, const size_t fractional_bits,
+                            const T k, ArithmeticBEAVYWireP<T>&& input);
+  ~ArithmeticBEAVYConstADD();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  
+  ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; }
+ private:
+  BEAVYProvider& beavy_provider_;
+  ArithmeticBEAVYWireP<T> input_;
+  const size_t fractional_bits_;
+  const T constant_;
+  std::shared_ptr<ArithmeticBEAVYWire<T>> output_;
+  // ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+  // std::vector<T> Delta_y_share_;
+  // std::unique_ptr<MOTION::IntegerMultiplicationSender<T>> mult_sender_;
+  // std::unique_ptr<MOTION::IntegerMultiplicationReceiver<T>> mult_receiver_;
+};
+
+//---------------------------------------------------------------------------------------------
+
+
 template <typename T>
 class ArithmeticBEAVYMULGate : public detail::BasicArithmeticBEAVYBinaryGate<T> {
  public:

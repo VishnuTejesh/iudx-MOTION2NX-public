@@ -58,22 +58,13 @@ T sar(T x, std::size_t n) {
 template <typename I, typename F, typename = std::enable_if_t<check_types_v<I, F>>>
 I encode(F x, std::size_t fractional_bits) {
   long double y = x;
-  // std :: cout << "\n Inside encode";
-  // std :: cout << "\n bit size v: " << bit_size_v<I> << "input as float " << x << "input as Long
-  // double " << y; std :: cout << "\n fractional bits: " << fractional_bits << "\n" ;
   assert(fractional_bits <= bit_size_v<I>);
   if (x >= 0) {
-    // return std::lround(x * (I(1) << fractional_bits));
-    // std :: cout << "\n Positive return value : " << (x * std::exp2(fractional_bits)) << "\n";
-    // std :: cout << "ULONG MAX:" << 	ULONG_MAX;
     return (x * std::exp2(fractional_bits));
   } else {
-    // std :: cout << "\n Negative return value : " << (x * std::exp2(fractional_bits)) << "\n";
     I return_variable = x * std::exp2(fractional_bits);
-    // std :: cout << "\n New return variable " << return_variable;
     return (x * std::exp2(fractional_bits));
   }
-  // std :: cout << "End of encode \n";
 }
 
 // Decode a fixed point number `y` encoded in integer type `T` with
@@ -82,23 +73,31 @@ I encode(F x, std::size_t fractional_bits) {
 template <typename I, typename F, typename = std::enable_if_t<check_types_v<I, F>>>
 F decode(I y, std::size_t fractional_bits) {
   I new_value = ULONG_MAX;
-  // std :: cout << "\n Inside decode \n";
-  // std :: cout << "\n bit size v: " << bit_size_v<I> ;
-  // std :: cout << "\n fractional bits: " << fractional_bits << "\n" ;
   assert(fractional_bits <= bit_size_v<I>);
   if (y < (I(1) << (bit_size_v<I> - 1))) {
-    // std :: cout << "\n Inside positive \n";
+
     I z = y;
-    // std::cout.precision(17);
     long double ans = (z) / std::exp2(fractional_bits);
-    // std :: cout << double(y) << " " << z;
     return ans;
   } else {
     I z = (new_value - y);
     long double ans = (z) / std::exp2(fractional_bits);
-    // std :: cout << "\n Inside negative \n";
-    // std::cout.precision(17);
-    // std :: cout << y << " " <<  new_value << " I+1 :" << z+1 << "double" << ans;
+    return -ans;
+  }
+}
+
+
+template <typename I, typename F, typename = std::enable_if_t<check_types_v<I, F>>>
+I decode_uint(I y, std::size_t fractional_bits) {
+  I new_value = ULONG_MAX;
+  assert(fractional_bits <= bit_size_v<I>);
+  if (y < (I(1) << (bit_size_v<I> - 1))) {
+    I z = y;
+    I ans = (z) / std::exp2(fractional_bits);
+    return ans;
+  } else {
+    I z = (new_value - y);
+    I ans = (z) / std::exp2(fractional_bits);
     return -ans;
   }
 }

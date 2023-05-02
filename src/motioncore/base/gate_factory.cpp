@@ -146,5 +146,20 @@ void GateFactory::make_arithmetic_output_gate_other(std::size_t, const WireVecto
   throw std::logic_error(
       fmt::format("{} does not support arithmetic outputs", get_provider_name()));
 }
+//-------------------------------Added below function on Feb 3----------------------------
+WireVector GateFactory::make_convert_bit_to_arithmetic_beavy_gate(const WireVector& in_a) {
+  throw std::logic_error(
+        fmt::format("{} Should not be coming here", get_provider_name()));
+  }
 
+WireVector GateFactory::make_constMul_gate(const WireVector&,const uint64_t k, const size_t){
+throw std::logic_error(
+        fmt::format("{} Unable to make constMul gate.", get_provider_name()));
+}
+WireVector GateFactory::make_constADD_gate(const WireVector&,const uint64_t k, const size_t){
+throw std::logic_error(
+        fmt::format("{} Unable to make constADD gate.", get_provider_name()));
+}
+
+//-----------------------------Added below on Feb 13 ----------------------------------------
 }  // namespace MOTION

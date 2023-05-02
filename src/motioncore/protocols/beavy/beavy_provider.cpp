@@ -92,6 +92,22 @@ static BooleanBEAVYWireVector cast_wires(std::vector<std::shared_ptr<NewWire>> w
   return result;
 }
 
+static BooleanBEAVYWireP cast_wires_BooleanBEAVY(std::shared_ptr<NewWire> wire) { // added on feb2
+
+  auto result = std::dynamic_pointer_cast<BooleanBEAVYWire>(wire); 
+  assert(result);
+  return result;
+}
+
+
+WireVector BEAVYProvider::make_convert_bit_to_arithmetic_beavy_gate(const WireVector& in_a) { // added on feb 3
+   const auto& wire = in_a.at(0);
+   auto BB_wire = cast_wires_BooleanBEAVY(std::move(wire));
+   assert(BB_wire->get_bit_size()>=1);
+ return basic_make_convert_bit_to_arithmetic_beavy_gate<std::uint64_t>(BB_wire);
+}
+
+
 static plain::BooleanPlainWireVector cast_to_plain_wires(
     std::vector<std::shared_ptr<NewWire>> wires) {
   plain::BooleanPlainWireVector result(wires.size());
@@ -111,6 +127,18 @@ static ArithmeticBEAVYWireP<T> cast_arith_wire(std::shared_ptr<NewWire> wire) {
   assert(ptr);
   return ptr;
 }
+
+//------------------------------- Added on Feb 13 ------------------------------
+// To convert WireVector to ArithmeticBEAVYWireVector 
+template <typename T>
+static ArithmeticBEAVYWireVector<T> cast_arith_wirevector(std::vector<std::shared_ptr<NewWire>> wires) {
+  ArithmeticBEAVYWireVector<T> result(wires.size());
+  std::transform(std::begin(wires), std::end(wires), std::begin(result),
+                 [](auto& w) { return std::dynamic_pointer_cast<ArithmeticBEAVYWire>(w); });
+  return result;
+}
+//------------------------------------------------------------------------------
+
 
 template <typename T>
 static plain::ArithmeticPlainWireP<T> cast_arith_plain_wire(std::shared_ptr<NewWire> wire) {
@@ -656,6 +684,76 @@ WireVector BEAVYProvider::make_mul_gate(const WireVector& in_a, const WireVector
 WireVector BEAVYProvider::make_sqr_gate(const WireVector& in) {
   return make_arithmetic_unary_gate<ArithmeticBEAVYSQRGate>(in);
 }
+
+//------------------------------------------------ Constant Multiplication -----------------------------------------
+
+WireVector BEAVYProvider::make_constMul_gate(const WireVector& in,
+                                                        const uint64_t k,const size_t fractional_bits) {
+  assert(in.size()>=1);
+  auto bit_size = in[0]->get_bit_size();
+  std::unique_ptr<NewGate> gate;
+  auto gate_id = gate_register_.get_next_gate_id();
+  std::cout<<"ArithmeticBEAVYConstMul Gate ID: "<<gate_id<<std::endl;
+  WireVector output;
+
+  const auto make_op = [this, in, gate_id, k,&output,fractional_bits](auto dummy_arg) {  
+    using T = decltype(dummy_arg);
+    auto temp = cast_arith_wire<T>(std::move(in[0]));
+    auto gate = std::make_unique<ArithmeticBEAVYConstMul<T>>(
+        gate_id, *this, fractional_bits, k, std::move(temp));           
+    output = {cast_arith_wire<T>(gate->get_output_wire())};
+    return gate;
+  };
+  switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
+    case 64:
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+//---------------------------------------------------------------------------------------------------------------
+
+//------------------------------------------------ Constant Addition -----------------------------------------
+
+WireVector BEAVYProvider::make_constADD_gate(const WireVector& in,
+                                                        const uint64_t k,const size_t fractional_bits) {
+  assert(in.size()>=1);
+  auto bit_size = in[0]->get_bit_size();
+  std::unique_ptr<NewGate> gate;
+  auto gate_id = gate_register_.get_next_gate_id();
+  std::cout<<"ArithmeticBEAVYConstADD Gate ID: "<<gate_id<<std::endl;
+  WireVector output;
+
+  const auto make_op = [this, in, gate_id, k,&output,fractional_bits](auto dummy_arg) {  
+    using T = decltype(dummy_arg);
+    auto temp = cast_arith_wire<T>(std::move(in[0]));
+    auto gate = std::make_unique<ArithmeticBEAVYConstADD<T>>(
+        gate_id, *this, fractional_bits, k, std::move(temp));           
+    output = {cast_arith_wire<T>(gate->get_output_wire())};
+    return gate;
+  };
+  switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
+    case 64:
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+//---------------------------------------------------------------------------------------------------------------
 
 template <typename T>
 WireVector BEAVYProvider::basic_make_convert_to_arithmetic_beavy_gate(

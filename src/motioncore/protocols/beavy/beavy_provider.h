@@ -282,6 +282,8 @@ class BEAVYProvider : public GateFactory,
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_mul_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_sqr_gate(const WireVector& in_a);
+  WireVector make_constMul_gate(const WireVector&,const uint64_t, const size_t);// override; // Added on Feb10
+  WireVector make_constADD_gate(const WireVector&,const uint64_t, const size_t); //Added on Feb 15
   template <typename T>
   WireVector basic_make_convert_to_arithmetic_beavy_gate(BooleanBEAVYWireVector&& in_a);
   WireVector make_convert_to_arithmetic_beavy_gate(BooleanBEAVYWireVector&& in_a);
@@ -290,7 +292,7 @@ class BEAVYProvider : public GateFactory,
   // TODO: design API for bit x integer operations
   template <typename T>
   WireVector basic_make_convert_bit_to_arithmetic_beavy_gate(BooleanBEAVYWireP in_a);
-
+  WireVector make_convert_bit_to_arithmetic_beavy_gate(const WireVector& in_a) override; // added on Feb 3
  private:
   WireVector make_convert_to_boolean_gmw_gate(BooleanBEAVYWireVector&& in_a);
   BooleanBEAVYWireVector make_convert_from_boolean_gmw_gate(const WireVector& in);

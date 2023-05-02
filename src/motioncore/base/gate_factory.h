@@ -112,9 +112,18 @@ class GateFactory {
 
   virtual WireVector make_binary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
                                       const WireVector&) = 0;
+  //------------------(currently only for BEAVY)-----
+  //Adding Constant Multiplication Gate  (on Feb 10)
+  virtual WireVector make_constMul_gate(const WireVector&,const uint64_t k,const size_t);
 
+  //Adding constant add gate
+  virtual WireVector make_constADD_gate(const WireVector&,const uint64_t k,const size_t);
+
+ //----------------------------------------------------------------------------------------
   // conversions
   virtual WireVector convert(MPCProtocol dst_protocol, const WireVector&) = 0;
+  virtual WireVector make_convert_bit_to_arithmetic_beavy_gate(const WireVector&); //added on Feb 3
+
 };
 
 }  // namespace MOTION

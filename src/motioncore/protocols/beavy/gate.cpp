@@ -38,6 +38,7 @@
 #include "utility/helpers.h"
 #include "utility/logger.h"
 #include "wire.h"
+#include "utility/new_fixed_point.h"
 
 namespace fs = std::filesystem;
 
@@ -1124,6 +1125,249 @@ template class ArithmeticBEAVYADDGate<std::uint8_t>;
 template class ArithmeticBEAVYADDGate<std::uint16_t>;
 template class ArithmeticBEAVYADDGate<std::uint32_t>;
 template class ArithmeticBEAVYADDGate<std::uint64_t>;
+
+//-------------------------------------- Implementation of Constant Multiplication  (addnl)--------------------------
+template <typename T>
+ArithmeticBEAVYConstMul<T>::ArithmeticBEAVYConstMul(
+    std::size_t gate_id, BEAVYProvider& beavy_provider, std::size_t fractional_bits, const T k,
+    ArithmeticBEAVYWireP<T>&& input)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      fractional_bits_(fractional_bits),
+      constant_(k),
+      input_(std::move(input)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(this->input_->get_num_simd())) 
+      {
+  this->output_->get_public_share().resize(this->input_->get_num_simd());
+  this->output_->get_secret_share().resize(this->input_->get_num_simd());
+  std::cout<<"Output secret share size: "<<this->output_->get_secret_share().size()<<std::endl;
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYConstMul<T> created", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+ArithmeticBEAVYConstMul<T>::~ArithmeticBEAVYConstMul() = default; //Destructor
+
+template <typename T>
+void ArithmeticBEAVYConstMul<T>::evaluate_setup() {
+  std::cout<<"In gate.cpp - evaluate_setup"<<std::endl;
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstMul<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  std::cout<<"Gate Input: "<<this->input_->get_num_simd()<<std::endl;
+  this->input_->wait_setup();
+  assert(this->output_->get_secret_share().size() == this->input_->get_num_simd());
+  std::vector<T> constant_vector(this->input_->get_num_simd(), constant_);
+  auto& output_share_temp = constant_vector;
+  try{
+    std::transform( std::begin(this->input_->get_secret_share()),std::end(this->input_->get_secret_share()), std::begin(constant_vector),std::begin(output_share_temp), std::multiplies{});
+      }
+  catch(std::exception& e){
+      std::cout<<"Error in multiplying constant and wire in gate.cpp - "<<e.what()<<std::endl;
+  
+    }
+
+    if (this->fractional_bits_ > 0) {
+    std::cout << "Decoding in evaluate setup" <<"\n";
+    auto output_share_decoded = output_share_temp;
+    std::cout<<"Fractional bits: "<<this->fractional_bits_<<std::endl;
+    std::transform( std::begin(output_share_temp),std::end(output_share_temp), std::begin(output_share_decoded), [this](auto tmp){
+        return MOTION::new_fixed_point::decode_uint<uint64_t, double>(tmp, this->fractional_bits_);
+    });
+    this->output_->get_secret_share() = std::move(output_share_decoded);
+
+    }
+    else
+      this->output_->get_secret_share() = std::move(output_share_temp);
+
+    try{
+    
+    this->output_->set_setup_ready();
+    }
+    catch(std::exception& e){
+      std::cout<<"Error in setting setup-ready as true in gate.cpp- "<<e.what()<<std::endl;
+    }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstMUl<T>::evaluate_setup end", gate_id_));
+    }
+  }
+std::cout<<"Exiting evaluate setup in gate.cpp"<<std::endl;
+}
+
+template <typename T>
+void ArithmeticBEAVYConstMul<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstMul<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  this->input_->wait_online();
+  assert(this->output_->get_public_share().size() == this->input_->get_num_simd());
+  std::vector<T> constant_vector(this->input_->get_num_simd(), constant_);
+  auto& output_share_temp = constant_vector;
+  try{
+    std::transform( std::begin(this->input_->get_public_share()),std::end(this->input_->get_public_share()), std::begin(constant_vector),std::begin(output_share_temp), std::multiplies{});
+      }
+  catch(std::exception& e){
+      std::cout<<"Error in multiplying constant and wire in gate.cpp - "<<e.what()<<std::endl;
+    }
+    
+  if (this->fractional_bits_ > 0) {
+    std::cout << "Decoding in evaluate online" <<"\n";
+    auto output_share_decoded = output_share_temp;
+    std::cout<<"Fractional bits: "<<this->fractional_bits_<<std::endl;
+    std::transform( std::begin(output_share_temp),std::end(output_share_temp), std::begin(output_share_decoded), [this](auto tmp){
+        return MOTION::new_fixed_point::decode_uint<uint64_t, double>(tmp, this->fractional_bits_);
+    });
+    
+    this->output_->get_public_share() = std::move(output_share_decoded);
+    }
+  else{
+    this->output_->get_public_share() = std::move(output_share_temp);
+  }
+  this->output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstMul<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+template class ArithmeticBEAVYConstMul<std::uint8_t>;
+template class ArithmeticBEAVYConstMul<std::uint16_t>;
+template class ArithmeticBEAVYConstMul<std::uint32_t>;
+template class ArithmeticBEAVYConstMul<std::uint64_t>;
+
+//---------------------------------------------------------------------------------------------
+
+
+//-------------------------------------- Implementation of Constant Addition  (addnl)--------------------------
+template <typename T>
+ArithmeticBEAVYConstADD<T>::ArithmeticBEAVYConstADD(
+    std::size_t gate_id, BEAVYProvider& beavy_provider, std::size_t fractional_bits, const T k,
+    ArithmeticBEAVYWireP<T>&& input)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      fractional_bits_(fractional_bits),
+      constant_(k),
+      input_(std::move(input)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(this->input_->get_num_simd())) 
+      {
+  this->output_->get_public_share().resize(this->input_->get_num_simd());
+  this->output_->get_secret_share().resize(this->input_->get_num_simd());
+  std::cout<<"Output secret share size: "<<this->output_->get_secret_share().size()<<std::endl;
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYConstADD<T> created", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+ArithmeticBEAVYConstADD<T>::~ArithmeticBEAVYConstADD() = default; //Destructor
+
+template <typename T>
+void ArithmeticBEAVYConstADD<T>::evaluate_setup() {
+  std::cout<<"In gate.cpp - evaluate_setup"<<std::endl;
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstADD<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  std::cout<<"Gate Input: "<<this->input_->get_num_simd()<<std::endl;
+  this->input_->wait_setup();
+  assert(this->output_->get_secret_share().size() == this->input_->get_num_simd());
+  std::vector<T> constant_vector(this->input_->get_num_simd(), constant_);
+  auto& output_share_temp = constant_vector;
+  try{
+    std::transform( std::begin(this->input_->get_secret_share()),std::end(this->input_->get_secret_share()), std::begin(constant_vector),std::begin(output_share_temp), std::minus{});
+      }
+  catch(std::exception& e){
+      std::cout<<"Error in adding constant and wire in gate.cpp - "<<e.what()<<std::endl;
+  
+    }
+
+  this->output_->get_secret_share() = std::move(output_share_temp);
+
+  try{  
+    this->output_->set_setup_ready();
+    }
+    catch(std::exception& e){
+      std::cout<<"Error in setting setup-ready as true for ArithmeticBEAVYConstADD gate.cpp- "<<e.what()<<std::endl;
+    }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstADD<T>::evaluate_setup end", gate_id_));
+    }
+  }
+std::cout<<"Exiting evaluate setup in gate.cpp"<<std::endl;
+}
+
+template <typename T>
+void ArithmeticBEAVYConstADD<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstADD<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  this->input_->wait_online();
+  assert(this->output_->get_public_share().size() == this->input_->get_num_simd());
+  std::vector<T> constant_vector(this->input_->get_num_simd(), constant_);
+  auto& output_share_temp = constant_vector;
+  try{
+    std::transform( std::begin(this->input_->get_public_share()),std::end(this->input_->get_public_share()), std::begin(constant_vector),std::begin(output_share_temp), std::minus{});
+      }
+  catch(std::exception& e){
+      std::cout<<"Error in adding constant and wire in gate.cpp - "<<e.what()<<std::endl;
+    }
+  this->output_->get_public_share() = std::move(output_share_temp);
+  this->output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYConstADD<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+template class ArithmeticBEAVYConstADD<std::uint8_t>;
+template class ArithmeticBEAVYConstADD<std::uint16_t>;
+template class ArithmeticBEAVYConstADD<std::uint32_t>;
+template class ArithmeticBEAVYConstADD<std::uint64_t>;
+
+//---------------------------------------------------------------------------------------------
+
 
 template <typename T>
 ArithmeticBEAVYMULGate<T>::ArithmeticBEAVYMULGate(std::size_t gate_id,
