@@ -119,48 +119,171 @@ wait $pid3
 wait $pid2 
 echo "Weight shares received"
 
-#########################Image Share Receiver ############################################################################################
-echo "Image shares receiver starts"
+for (( image_id=0; image_id<2; image_id++ )); do
 
-$build_path/bin/Image_Share_Receiver_CNN --my-id 1 --port $cs1_port_image_receiver --fractional-bits $fractional_bits --file-names $image_config --current-path $build_path > $debug_1/Image_Share_Receiver.txt &
-pid2=$!
+      #########################Image Share Receiver ############################################################################################
+      echo "Image shares receiver starts"
 
-wait $pid2
+      $build_path/bin/Image_Share_Receiver_CNN --my-id 1 --port $cs1_port_image_receiver --fractional-bits $fractional_bits --file-names $image_config --current-path $build_path > $debug_1/Image_Share_Receiver.txt &
+      pid2=$!
 
-echo "Image shares received"
-#########################Share generators end ############################################################################################
+      wait $pid2
+
+      echo "Image shares received"
+      #########################Share generators end ############################################################################################
 
 
-########################Inferencing task starts ###############################################################################################
+      ########################Inferencing task starts ###############################################################################################
 
-echo "Inferencing task of the image shared starts"
-start=$(date +%s)
+      echo "Inferencing task of the image shared starts"
+      start=$(date +%s)
 
-cp server1/Image_shares/remote_image_shares server1/outputshare_1
-cp server1/Image_shares/remote_image_shares server1/cnn_outputshare_1
-sed -i "1s/^[^ ]* //" server1/outputshare_1
+      cp server1/Image_shares/remote_image_shares server1/outputshare_1
+      cp server1/Image_shares/remote_image_shares server1/cnn_outputshare_1
+      sed -i "1s/^[^ ]* //" server1/outputshare_1
 
-layer_types=($(cat layer_types1))
-number_of_layers=${layer_types[0]}
+      layer_types=($(cat layer_types1))
+      number_of_layers=${layer_types[0]}
 
-split_info=$(echo "$smpc_config" | jq -r '.split_layers_genr[]')
-split_info_index=0
-split_info_layers=($(echo $split_info | jq -r '.layer_id'))
-split_info_length=${#split_info_layers[@]}
+      split_info=$(echo "$smpc_config" | jq -r '.split_layers_genr[]')
+      split_info_index=0
+      split_info_layers=($(echo $split_info | jq -r '.layer_id'))
+      split_info_length=${#split_info_layers[@]}
 
-for ((layer_id=1; layer_id<$number_of_layers; layer_id++)); do
-   num_splits=1
+      for ((layer_id=1; layer_id<$number_of_layers; layer_id++)); do
+         num_splits=1
 
-   # Check for information in split info
-   if [[ $split_info_index -lt $split_info_length ]] && [[ $layer_id -eq ${split_info_layers[split_info_index]} ]];
-   then
-      split=$(jq -r ".split_layers_genr[$split_info_index]" <<< "$smpc_config");
-      num_splits=$(jq -r '.splits' <<< "$split");
-      ((split_info_index++))
-   fi
+         # Check for information in split info
+         if [[ $split_info_index -lt $split_info_length ]] && [[ $layer_id -eq ${split_info_layers[split_info_index]} ]];
+         then
+            split=$(jq -r ".split_layers_genr[$split_info_index]" <<< "$smpc_config");
+            num_splits=$(jq -r '.splits' <<< "$split");
+            ((split_info_index++))
+         fi
 
-   if [ ${layer_types[layer_id]} -eq 0 ] && [ $num_splits -eq 1 ];
-   then
+         if [ ${layer_types[layer_id]} -eq 0 ] && [ $num_splits -eq 1 ];
+         then
+            input_config="outputshare"
+
+            $build_path/bin/tensor_gt_mul_test --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --current-path $build_path > $debug_1/tensor_gt_mul1_layer${layer_id}.txt &
+            pid1=$!
+            wait $pid1 
+            check_exit_statuses $?
+            echo "Layer $layer_id: Matrix multiplication and addition is done"
+            
+            $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
+            pid1=$!
+            wait $pid1
+            check_exit_statuses $?
+            echo "Layer $layer_id: ReLU is done"
+         
+         elif [ ${layer_types[layer_id]} -eq 0 ] && [ $num_splits -gt 1 ];
+         then
+            cp $build_path/server1/outputshare_1  $build_path/server1/split_input_1
+            input_config="split_input"
+
+            num_rows=$(jq -r '.rows' <<< "$split");
+            echo "Number of splits for layer $layer_id matrix multiplication: $num_rows::$num_splits"
+            x=$(($num_rows/$num_splits))
+            for(( m = 1; m <= $num_splits; m++ )); do 
+               let l=$((m-1))
+               let a=$((l*x+1))
+               let b=$((m*x))
+               let r=$((l*x))
+               
+               $build_path/bin/tensor_gt_mul_split --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --row_start $a --row_end $b --split $num_splits --current-path $build_path > $debug_1/tensor_gt_mul1_layer${layer_id}_split.txt &
+               pid1=$!
+               wait $pid1
+               check_exit_statuses $? 
+               echo "Layer $layer_id, split $m: Matrix multiplication and addition is done."
+               if [ $m -eq 1 ]; then
+                  touch finaloutput_1
+                  printf "$r 1\n" > finaloutput_1
+                  $build_path/bin/appendfile 1
+                  pid1=$!
+                  wait $pid1 
+                  check_exit_statuses $?
+               else 
+                  $build_path/bin/appendfile 1
+                  pid1=$!
+                  wait $pid1 
+                  check_exit_statuses $?
+               fi
+               sed -i "1s/${r} 1/${b} 1/" finaloutput_1
+            done
+
+            cp finaloutput_1  $build_path/server1/outputshare_1
+            if [ -f finaloutput_1 ]; then
+               rm finaloutput_1
+            fi
+            if [ -f server1/split_input_1 ]; then
+               rm server1/split_input_1
+            fi
+            check_exit_statuses $?
+
+            $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
+            pid1=$!
+            wait $pid1
+            check_exit_statuses $?
+            echo "Layer $layer_id: ReLU is done"
+         
+         elif [ ${layer_types[layer_id]} -eq 1 ] && [ $num_splits -eq 1 ];
+         then
+            input_config="cnn_outputshare"
+            
+            $build_path/bin/cnn --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --current-path $build_path > $debug_1/cnn1_layer${layer_id}.txt &
+            pid1=$!
+            wait $pid1 
+            check_exit_statuses $?
+            echo "Layer $layer_id: Convolution is done"
+
+            $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
+            pid1=$!
+            wait $pid1
+            check_exit_statuses $?
+            echo "Layer $layer_id: ReLU is done"
+            tail -n +2 server1/outputshare_1 >> server1/cnn_outputshare_1
+         
+         elif [ ${layer_types[layer_id]} -eq 1 ] && [ $num_splits -gt 1 ];
+         then
+            cp $build_path/server1/cnn_outputshare_1  $build_path/server1/split_input_1
+            input_config="split_input"
+
+            echo "Number of splits for layer $layer_id convolution: $num_splits"
+            num_kernels=$(jq -r '.kernels' <<< "$split");
+            
+            x=$(($num_kernels/$num_splits))
+            for(( m = 1; m <= $num_splits; m++ )); do 
+               let l=$((m-1)) 
+               let a=$((l*x+1))
+               let b=$((m*x))
+               $build_path/bin/cnn_split --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --kernel_start $a --kernel_end $b --current-path $build_path > $debug_1/cnn1_layer${layer_id}_split.txt &
+               pid1=$!
+               wait $pid1
+               check_exit_statuses $? 
+               echo "Layer $layer_id, split $m: Convolution is done."
+
+               tail -n +2 server1/outputshare_1 >> server1/final_outputshare_1
+            done
+
+            cp server1/final_outputshare_1  server1/outputshare_1 
+            if [ -f server1/final_outputshare_1 ]; then
+               rm server1/final_outputshare_1
+            fi
+            if [ -f server1/split_input_1 ]; then
+               rm server1/split_input_1
+            fi
+            check_exit_statuses $?
+
+            $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
+            pid1=$!
+            wait $pid1
+            check_exit_statuses $?
+            echo "Layer $layer_id: ReLU is done"
+            tail -n +2 server1/outputshare_1 >> server1/cnn_outputshare_1
+         fi
+      done
+
       input_config="outputshare"
 
       $build_path/bin/tensor_gt_mul_test --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --current-path $build_path > $debug_1/tensor_gt_mul1_layer${layer_id}.txt &
@@ -168,166 +291,46 @@ for ((layer_id=1; layer_id<$number_of_layers; layer_id++)); do
       wait $pid1 
       check_exit_statuses $?
       echo "Layer $layer_id: Matrix multiplication and addition is done"
-      
-      $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
+
+      ####################################### Argmax  ###########################################################################
+
+      $build_path/bin/argmax --my-id 1 --threads 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol beavy --config-filename file_config_input1 --config-input $image_share --current-path $build_path > $debug_1/argmax1_layer${layer_id}.txt &
       pid1=$!
       wait $pid1
       check_exit_statuses $?
-      echo "Layer $layer_id: ReLU is done"
-   
-   elif [ ${layer_types[layer_id]} -eq 0 ] && [ $num_splits -gt 1 ];
-   then
-      cp $build_path/server1/outputshare_1  $build_path/server1/split_input_1
-      input_config="split_input"
+      echo "Layer $layer_id: Argmax is done"
 
-      num_rows=$(jq -r '.rows' <<< "$split");
-      echo "Number of splits for layer $layer_id matrix multiplication: $num_rows::$num_splits"
-      x=$(($num_rows/$num_splits))
-      for(( m = 1; m <= $num_splits; m++ )); do 
-         let l=$((m-1))
-         let a=$((l*x+1))
-         let b=$((m*x))
-         let r=$((l*x))
-         
-         $build_path/bin/tensor_gt_mul_split --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --row_start $a --row_end $b --split $num_splits --current-path $build_path > $debug_1/tensor_gt_mul1_layer${layer_id}_split.txt &
-         pid1=$!
-         wait $pid1
-         check_exit_statuses $? 
-         echo "Layer $layer_id, split $m: Matrix multiplication and addition is done."
-         if [ $m -eq 1 ]; then
-            touch finaloutput_1
-            printf "$r 1\n" > finaloutput_1
-            $build_path/bin/appendfile 1
-            pid1=$!
-            wait $pid1 
-            check_exit_statuses $?
-         else 
-            $build_path/bin/appendfile 1
-            pid1=$!
-            wait $pid1 
-            check_exit_statuses $?
-         fi
-         sed -i "1s/${r} 1/${b} 1/" finaloutput_1
-      done
+      end=$(date +%s)
+      ####################################### Final output provider  ###########################################################################
 
-      cp finaloutput_1  $build_path/server1/outputshare_1
-      if [ -f finaloutput_1 ]; then
-         rm finaloutput_1
-      fi
-      if [ -f server1/split_input_1 ]; then
-         rm server1/split_input_1
-      fi
-      check_exit_statuses $?
+      $build_path/bin/final_output_provider --my-id 1 --connection-port $cs0_port_cs1_output_receiver --connection-ip $cs0_host --config-input $image_share --current-path $build_path > $debug_1/final_output_provider.txt &
+      pid4=$!
+      wait $pid4 
+      echo "Output shares of server 1 sent to the Image provider"
 
-      $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
-      pid1=$!
-      wait $pid1
-      check_exit_statuses $?
-      echo "Layer $layer_id: ReLU is done"
-   
-   elif [ ${layer_types[layer_id]} -eq 1 ] && [ $num_splits -eq 1 ];
-   then
-      input_config="cnn_outputshare"
-      
-      $build_path/bin/cnn --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --current-path $build_path > $debug_1/cnn1_layer${layer_id}.txt &
-      pid1=$!
-      wait $pid1 
-      check_exit_statuses $?
-      echo "Layer $layer_id: Convolution is done"
+      wait 
+      #kill $pid5 $pid6
 
-      $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
-      pid1=$!
-      wait $pid1
-      check_exit_statuses $?
-      echo "Layer $layer_id: ReLU is done"
-      tail -n +2 server1/outputshare_1 >> server1/cnn_outputshare_1
-   
-   elif [ ${layer_types[layer_id]} -eq 1 ] && [ $num_splits -gt 1 ];
-   then
-      cp $build_path/server1/cnn_outputshare_1  $build_path/server1/split_input_1
-      input_config="split_input"
+      awk '{ sum += $1 } END { print sum }' AverageTimeDetails1 >> AverageTime1
+      #  > AverageTimeDetails1 #clearing the contents of the file
 
-      echo "Number of splits for layer $layer_id convolution: $num_splits"
-      num_kernels=$(jq -r '.kernels' <<< "$split");
-      
-      x=$(($num_kernels/$num_splits))
-      for(( m = 1; m <= $num_splits; m++ )); do 
-         let l=$((m-1)) 
-         let a=$((l*x+1))
-         let b=$((m*x))
-         $build_path/bin/cnn_split --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --kernel_start $a --kernel_end $b --current-path $build_path > $debug_1/cnn1_layer${layer_id}_split.txt &
-         pid1=$!
-         wait $pid1
-         check_exit_statuses $? 
-         echo "Layer $layer_id, split $m: Convolution is done."
+      sort -r -g AverageMemoryDetails1 | head  -1 >> AverageMemory1
+      #  > AverageMemoryDetails1 #clearing the contents of the file
 
-         tail -n +2 server1/outputshare_1 >> server1/final_outputshare_1
-      done
+      echo -e "\nInferencing Finished"
 
-      cp server1/final_outputshare_1  server1/outputshare_1 
-      if [ -f server1/final_outputshare_1 ]; then
-         rm server1/final_outputshare_1
-      fi
-      if [ -f server1/split_input_1 ]; then
-         rm server1/split_input_1
-      fi
-      check_exit_statuses $?
+      Mem=`cat AverageMemory1`
+      Time=`cat AverageTime1`
 
-      $build_path/bin/tensor_gt_relu --my-id 1 --party 0,$cs0_host,$relu0_port_inference --party 1,$cs1_host,$relu1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --filepath file_config_input1 --current-path $build_path > $debug_1/tensor_gt_relu1_layer${layer_id}.txt &
-      pid1=$!
-      wait $pid1
-      check_exit_statuses $?
-      echo "Layer $layer_id: ReLU is done"
-      tail -n +2 server1/outputshare_1 >> server1/cnn_outputshare_1
-   fi
+      Mem=$(printf "%.2f" $Mem) 
+      Convert_KB_to_GB=$(printf "%.14f" 9.5367431640625E-7)
+      Mem2=$(echo "$Convert_KB_to_GB * $Mem" | bc -l)
+
+      Memory=$(printf "%.3f" $Mem2)
+
+      echo "Memory requirement:" `printf "%.3f" $Memory` "GB"
+      echo "Time taken by inferencing task:" $Time "ms"
+      echo "Elapsed Time: $(($end-$start)) seconds"
 done
-
-input_config="outputshare"
-
-$build_path/bin/tensor_gt_mul_test --my-id 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol yao --fractional-bits $fractional_bits --config-file-input $input_config --config-file-model file_config_model1 --layer-id $layer_id --current-path $build_path > $debug_1/tensor_gt_mul1_layer${layer_id}.txt &
-pid1=$!
-wait $pid1 
-check_exit_statuses $?
-echo "Layer $layer_id: Matrix multiplication and addition is done"
-
-####################################### Argmax  ###########################################################################
-
-$build_path/bin/argmax --my-id 1 --threads 1 --party 0,$cs0_host,$cs0_port_inference --party 1,$cs1_host,$cs1_port_inference --arithmetic-protocol beavy --boolean-protocol beavy --config-filename file_config_input1 --config-input $image_share --current-path $build_path > $debug_1/argmax1_layer${layer_id}.txt &
-pid1=$!
-wait $pid1
-check_exit_statuses $?
-echo "Layer $layer_id: Argmax is done"
-
-end=$(date +%s)
-####################################### Final output provider  ###########################################################################
-
-$build_path/bin/final_output_provider --my-id 1 --connection-port $cs0_port_cs1_output_receiver --connection-ip $cs0_host --config-input $image_share --current-path $build_path > $debug_1/final_output_provider.txt &
-pid4=$!
-wait $pid4 
-echo "Output shares of server 1 sent to the Image provider"
-
-wait 
-#kill $pid5 $pid6
-
- awk '{ sum += $1 } END { print sum }' AverageTimeDetails1 >> AverageTime1
-#  > AverageTimeDetails1 #clearing the contents of the file
-
-  sort -r -g AverageMemoryDetails1 | head  -1 >> AverageMemory1
-#  > AverageMemoryDetails1 #clearing the contents of the file
-
-echo -e "\nInferencing Finished"
-
-Mem=`cat AverageMemory1`
-Time=`cat AverageTime1`
-
-Mem=$(printf "%.2f" $Mem) 
-Convert_KB_to_GB=$(printf "%.14f" 9.5367431640625E-7)
-Mem2=$(echo "$Convert_KB_to_GB * $Mem" | bc -l)
-
-Memory=$(printf "%.3f" $Mem2)
-
-echo "Memory requirement:" `printf "%.3f" $Memory` "GB"
-echo "Time taken by inferencing task:" $Time "ms"
-echo "Elapsed Time: $(($end-$start)) seconds"
 
 cd $scripts_path

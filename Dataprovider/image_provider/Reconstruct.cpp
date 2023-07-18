@@ -97,6 +97,11 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "\nThe image shared is detected as"
               << ":" << i << "\n";
+    
+    std::ofstream output;
+    output.open(path+"/outputs", std::ios::out | std::ios::app);
+    output << i << "\n";
+    output.close();
   } catch (std::runtime_error& e) {
     std::cerr << "ERROR OCCURRED: " << e.what() << "\n";
     std::cerr << "ERROR Caught !!"
