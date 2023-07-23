@@ -120,7 +120,7 @@ pid2=$!
 wait $pid2
 echo "Weight shares received"
 
-for (( image_id=0; image_id<2; image_id++ )); do
+for (( image_id=0; image_id<100; image_id++ )); do
 
       #########################Image Share Receiver ############################################################################################
       echo "Image shares receiver starts"
@@ -140,6 +140,7 @@ for (( image_id=0; image_id<2; image_id++ )); do
       #########################Share generators end ############################################################################################
 
       ########################Inferencing task starts ###############################################################################################
+      echo $image_id
       echo "Inferencing task of the image shared starts"
       start=$(date +%s)
 

@@ -1,3 +1,4 @@
+
 #! /bin/bash
 check_exit_statuses() {
    for status in "$@";
@@ -119,7 +120,7 @@ wait $pid3
 wait $pid2 
 echo "Weight shares received"
 
-for (( image_id=0; image_id<2; image_id++ )); do
+for (( image_id=0; image_id<100; image_id++ )); do
 
       #########################Image Share Receiver ############################################################################################
       echo "Image shares receiver starts"
