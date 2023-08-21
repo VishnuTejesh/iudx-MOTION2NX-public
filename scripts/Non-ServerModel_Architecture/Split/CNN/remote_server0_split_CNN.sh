@@ -120,7 +120,7 @@ pid2=$!
 wait $pid2
 echo "Weight shares received"
 
-for (( image_id=0; image_id<100; image_id++ )); do
+for (( image_id=200; image_id<300; image_id++ )); do
 
       #########################Image Share Receiver ############################################################################################
       echo "Image shares receiver starts"
